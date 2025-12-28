@@ -13,15 +13,15 @@
 // 子板类型
 struct ItemType {
     int id;
-    int width;      // 水平方向尺寸
-    int height;     // 垂直方向尺寸
+    int width;      // 宽度 (切割方向, Stage1分条带)
+    int length;     // 长度 (条带延伸方向, Stage2切子板)
     int demand;     // 需求量
 };
 
 // 算例数据
 struct Instance {
-    int stock_width;                // 母板宽度
-    int stock_height;               // 母板高度
+    int stock_width;                // 母板宽度 W (切割方向)
+    int stock_length;               // 母板长度 L (条带延伸方向)
     std::vector<ItemType> items;    // 子板列表
     int known_optimal;              // 已知最优解 (-1表示未知)
     double difficulty;              // 生成时使用的难度参数
@@ -93,8 +93,9 @@ public:
 
     // 主生成函数: 根据难度生成算例
     // difficulty: 难度系数 0.0-1.0
-    // stock_width, stock_height: 母板尺寸
-    Instance Generate(double difficulty, int stock_width = 1000, int stock_height = 500);
+    // stock_width: 母板宽度 W (切割方向)
+    // stock_length: 母板长度 L (条带延伸方向)
+    Instance Generate(double difficulty, int stock_width = 200, int stock_length = 400);
 
     // 导出为 2DPackLib CSV 格式
     bool ExportCSV(const Instance& inst, const std::string& filepath);
@@ -115,22 +116,22 @@ private:
 
     // 策略0: 逆向生成 (已知最优解)
     // 先构造完美填充的切割方案, 再统计子板需求
-    Instance GenerateReverse(const DifficultyParams& params, int W, int H);
+    Instance GenerateReverse(const DifficultyParams& params, int W, int L);
 
     // 策略1: 参数化随机生成
     // 根据难度参数控制尺寸分布和需求量
-    Instance GenerateRandom(const DifficultyParams& params, int W, int H);
+    Instance GenerateRandom(const DifficultyParams& params, int W, int L);
 
     // 策略2: 残差算例生成
     // 生成难以完美填充的子板组合
-    Instance GenerateResidual(const DifficultyParams& params, int W, int H);
+    Instance GenerateResidual(const DifficultyParams& params, int W, int L);
 
     // 生成单个子板尺寸
-    // base_w, base_h: 基准尺寸 (用于相似度控制)
+    // base_w, base_l: 基准尺寸 (用于相似度控制)
     // similarity: 相似度 0-1
-    std::pair<int, int> GenerateItemSize(int W, int H,
+    std::pair<int, int> GenerateItemSize(int W, int L,
         const DifficultyParams& params,
-        int base_w = 0, int base_h = 0);
+        int base_w = 0, int base_l = 0);
 
     // 生成"不友好"的尺寸 (难以整除母板)
     int GenerateDifficultSize(int stock_size, double difficulty);

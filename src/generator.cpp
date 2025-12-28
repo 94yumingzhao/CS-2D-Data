@@ -30,12 +30,12 @@ InstanceGenerator::InstanceGenerator(unsigned int seed) {
     rng_.seed(seed);
 }
 
-Instance InstanceGenerator::Generate(double difficulty, int stock_width, int stock_height) {
+Instance InstanceGenerator::Generate(double difficulty, int stock_width, int stock_length) {
     DifficultyParams params(difficulty);
 
     Instance inst;
     inst.stock_width = stock_width;
-    inst.stock_height = stock_height;
+    inst.stock_length = stock_length;
     inst.difficulty = difficulty;
     inst.known_optimal = -1;
 
@@ -44,16 +44,16 @@ Instance InstanceGenerator::Generate(double difficulty, int stock_width, int sto
 
     switch (strategy) {
         case 0:
-            inst = GenerateReverse(params, stock_width, stock_height);
+            inst = GenerateReverse(params, stock_width, stock_length);
             break;
         case 1:
-            inst = GenerateRandom(params, stock_width, stock_height);
+            inst = GenerateRandom(params, stock_width, stock_length);
             break;
         case 2:
-            inst = GenerateResidual(params, stock_width, stock_height);
+            inst = GenerateResidual(params, stock_width, stock_length);
             break;
         default:
-            inst = GenerateRandom(params, stock_width, stock_height);
+            inst = GenerateRandom(params, stock_width, stock_length);
     }
 
     return inst;
@@ -61,10 +61,13 @@ Instance InstanceGenerator::Generate(double difficulty, int stock_width, int sto
 
 // 策略0: 逆向生成
 // 思路: 先用贪心方法填满若干张母板, 统计各子板类型的产出作为需求
-Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int W, int H) {
+// OR文献标准: W=宽度(切割方向), L=长度(条带延伸方向)
+// Stage1: 沿W切条带, 条带宽度=w_j, 条带长度=L
+// Stage2: 沿L切子板, 子板宽度=w_i, 子板长度=l_i
+Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int W, int L) {
     Instance inst;
     inst.stock_width = W;
-    inst.stock_height = H;
+    inst.stock_length = L;
     inst.difficulty = params.difficulty;
 
     // 决定使用的母板数量 (即最优解)
@@ -72,13 +75,13 @@ Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int 
     int num_stocks = num_stocks_dist(rng_);
     inst.known_optimal = num_stocks;
 
-    // 生成若干种基础子板尺寸
+    // 生成若干种基础子板尺寸 (width, length)
     int num_base_types = params.NumItemTypes();
     vector<pair<int, int>> base_sizes;
 
     for (int i = 0; i < num_base_types; i++) {
-        auto [w, h] = GenerateItemSize(W, H, params);
-        base_sizes.push_back({w, h});
+        auto [w, l] = GenerateItemSize(W, L, params);
+        base_sizes.push_back({w, l});
     }
 
     // 统计每种子板的需求量
@@ -86,21 +89,21 @@ Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int 
 
     // 对每张母板进行贪心填充
     for (int s = 0; s < num_stocks; s++) {
-        int remaining_height = H;
+        int remaining_width = W;
 
-        // 沿高度方向逐行填充
-        while (remaining_height > 0) {
-            // 随机选择一种子板作为当前行高度
+        // 沿宽度W方向逐条带填充 (Stage1)
+        while (remaining_width > 0) {
+            // 随机选择一种子板宽度作为当前条带宽度
             uniform_int_distribution<int> type_dist(0, num_base_types - 1);
             int type_idx = type_dist(rng_);
-            int row_height = base_sizes[type_idx].second;
+            int strip_width = base_sizes[type_idx].first;
 
-            if (row_height > remaining_height) {
+            if (strip_width > remaining_width) {
                 // 尝试找一个能放下的
                 bool found = false;
                 for (int i = 0; i < num_base_types; i++) {
-                    if (base_sizes[i].second <= remaining_height) {
-                        row_height = base_sizes[i].second;
+                    if (base_sizes[i].first <= remaining_width) {
+                        strip_width = base_sizes[i].first;
                         type_idx = i;
                         found = true;
                         break;
@@ -109,14 +112,14 @@ Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int 
                 if (!found) break;
             }
 
-            // 在当前行内沿宽度方向填充
-            int remaining_width = W;
-            while (remaining_width > 0) {
-                // 随机选择能放入的子板
+            // 在当前条带内沿长度L方向填充 (Stage2)
+            int remaining_length = L;
+            while (remaining_length > 0) {
+                // 随机选择能放入的子板 (宽度匹配, 长度可容纳)
                 vector<int> valid_types;
                 for (int i = 0; i < num_base_types; i++) {
-                    if (base_sizes[i].first <= remaining_width &&
-                        base_sizes[i].second == row_height) {
+                    if (base_sizes[i].second <= remaining_length &&
+                        base_sizes[i].first == strip_width) {
                         valid_types.push_back(i);
                     }
                 }
@@ -127,10 +130,10 @@ Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int 
                 int picked = valid_types[pick_dist(rng_)];
 
                 demand_map[base_sizes[picked]]++;
-                remaining_width -= base_sizes[picked].first;
+                remaining_length -= base_sizes[picked].second;
             }
 
-            remaining_height -= row_height;
+            remaining_width -= strip_width;
         }
     }
 
@@ -141,7 +144,7 @@ Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int 
             ItemType item;
             item.id = id++;
             item.width = size.first;
-            item.height = size.second;
+            item.length = size.second;
             item.demand = demand;
             inst.items.push_back(item);
         }
@@ -149,11 +152,11 @@ Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int 
 
     // 如果生成的子板类型太少, 补充一些
     while ((int)inst.items.size() < 3) {
-        auto [w, h] = GenerateItemSize(W, H, params);
+        auto [w, l] = GenerateItemSize(W, L, params);
         ItemType item;
         item.id = id++;
         item.width = w;
-        item.height = h;
+        item.length = l;
         item.demand = 1;
         inst.items.push_back(item);
         inst.known_optimal = -1;  // 添加额外子板后最优解不再确定
@@ -164,10 +167,10 @@ Instance InstanceGenerator::GenerateReverse(const DifficultyParams& params, int 
 
 // 策略1: 参数化随机生成
 // 根据难度参数控制尺寸分布、相似度、需求量
-Instance InstanceGenerator::GenerateRandom(const DifficultyParams& params, int W, int H) {
+Instance InstanceGenerator::GenerateRandom(const DifficultyParams& params, int W, int L) {
     Instance inst;
     inst.stock_width = W;
-    inst.stock_height = H;
+    inst.stock_length = L;
     inst.difficulty = params.difficulty;
     inst.known_optimal = -1;
 
@@ -175,24 +178,24 @@ Instance InstanceGenerator::GenerateRandom(const DifficultyParams& params, int W
     double similarity = params.SizeSimilarity();
 
     // 生成第一个子板作为基准
-    auto [base_w, base_h] = GenerateItemSize(W, H, params);
+    auto [base_w, base_l] = GenerateItemSize(W, L, params);
 
     // 用于去重的集合
     set<pair<int, int>> used_sizes;
-    used_sizes.insert({base_w, base_h});
+    used_sizes.insert({base_w, base_l});
 
     // 添加第一个子板
     ItemType first_item;
     first_item.id = 0;
     first_item.width = base_w;
-    first_item.height = base_h;
+    first_item.length = base_l;
     uniform_int_distribution<int> demand_dist(params.MinDemand(), params.MaxDemand());
     first_item.demand = demand_dist(rng_);
     inst.items.push_back(first_item);
 
     // 生成剩余子板
     for (int i = 1; i < num_types; i++) {
-        int w, h;
+        int w, l;
         int attempts = 0;
         const int max_attempts = 50;
 
@@ -201,22 +204,22 @@ Instance InstanceGenerator::GenerateRandom(const DifficultyParams& params, int W
             uniform_real_distribution<double> prob_dist(0.0, 1.0);
             if (prob_dist(rng_) < similarity) {
                 // 基于基准尺寸生成相似尺寸
-                tie(w, h) = GenerateItemSize(W, H, params, base_w, base_h);
+                tie(w, l) = GenerateItemSize(W, L, params, base_w, base_l);
             } else {
                 // 完全随机生成
-                tie(w, h) = GenerateItemSize(W, H, params);
+                tie(w, l) = GenerateItemSize(W, L, params);
             }
             attempts++;
-        } while (used_sizes.count({w, h}) && attempts < max_attempts);
+        } while (used_sizes.count({w, l}) && attempts < max_attempts);
 
         if (attempts >= max_attempts) continue;
 
-        used_sizes.insert({w, h});
+        used_sizes.insert({w, l});
 
         ItemType item;
         item.id = i;
         item.width = w;
-        item.height = h;
+        item.length = l;
         item.demand = demand_dist(rng_);
         inst.items.push_back(item);
     }
@@ -231,10 +234,10 @@ Instance InstanceGenerator::GenerateRandom(const DifficultyParams& params, int W
 
 // 策略2: 残差算例生成
 // 生成一组"几乎能填满"但有少量浪费的子板组合
-Instance InstanceGenerator::GenerateResidual(const DifficultyParams& params, int W, int H) {
+Instance InstanceGenerator::GenerateResidual(const DifficultyParams& params, int W, int L) {
     Instance inst;
     inst.stock_width = W;
-    inst.stock_height = H;
+    inst.stock_length = L;
     inst.difficulty = params.difficulty;
     inst.known_optimal = -1;
 
@@ -245,18 +248,18 @@ Instance InstanceGenerator::GenerateResidual(const DifficultyParams& params, int
     // 使用母板尺寸的"不友好"分割
     for (int i = 0; i < num_types; i++) {
         int w = GenerateDifficultSize(W, params.difficulty);
-        int h = GenerateDifficultSize(H, params.difficulty);
+        int l = GenerateDifficultSize(L, params.difficulty);
 
         // 确保尺寸在合理范围内
         int min_w = (int)(W * params.MinSizeRatio());
         int max_w = (int)(W * params.MaxSizeRatio());
-        int min_h = (int)(H * params.MinSizeRatio());
-        int max_h = (int)(H * params.MaxSizeRatio());
+        int min_l = (int)(L * params.MinSizeRatio());
+        int max_l = (int)(L * params.MaxSizeRatio());
 
         w = clamp(w, min_w, max_w);
-        h = clamp(h, min_h, max_h);
+        l = clamp(l, min_l, max_l);
 
-        sizes.push_back({w, h});
+        sizes.push_back({w, l});
     }
 
     // 去重并创建子板
@@ -265,11 +268,11 @@ Instance InstanceGenerator::GenerateResidual(const DifficultyParams& params, int
     int id = 0;
     uniform_int_distribution<int> demand_dist(1, params.MaxDemand() / 2);  // 残差算例需求量更小
 
-    for (const auto& [w, h] : unique_sizes) {
+    for (const auto& [w, l] : unique_sizes) {
         ItemType item;
         item.id = id++;
         item.width = w;
-        item.height = h;
+        item.length = l;
         item.demand = demand_dist(rng_);
         inst.items.push_back(item);
     }
@@ -277,37 +280,37 @@ Instance InstanceGenerator::GenerateResidual(const DifficultyParams& params, int
     return inst;
 }
 
-pair<int, int> InstanceGenerator::GenerateItemSize(int W, int H,
-    const DifficultyParams& params, int base_w, int base_h) {
+pair<int, int> InstanceGenerator::GenerateItemSize(int W, int L,
+    const DifficultyParams& params, int base_w, int base_l) {
 
     int min_w = (int)(W * params.MinSizeRatio());
     int max_w = (int)(W * params.MaxSizeRatio());
-    int min_h = (int)(H * params.MinSizeRatio());
-    int max_h = (int)(H * params.MaxSizeRatio());
+    int min_l = (int)(L * params.MinSizeRatio());
+    int max_l = (int)(L * params.MaxSizeRatio());
 
-    int w, h;
+    int w, l;
 
-    if (base_w > 0 && base_h > 0) {
+    if (base_w > 0 && base_l > 0) {
         // 基于基准尺寸生成相似尺寸
         double similarity = params.SizeSimilarity();
         int variation_w = (int)((1.0 - similarity) * (max_w - min_w) / 2);
-        int variation_h = (int)((1.0 - similarity) * (max_h - min_h) / 2);
+        int variation_l = (int)((1.0 - similarity) * (max_l - min_l) / 2);
 
         variation_w = max(1, variation_w);
-        variation_h = max(1, variation_h);
+        variation_l = max(1, variation_l);
 
         uniform_int_distribution<int> var_w_dist(-variation_w, variation_w);
-        uniform_int_distribution<int> var_h_dist(-variation_h, variation_h);
+        uniform_int_distribution<int> var_l_dist(-variation_l, variation_l);
 
         w = base_w + var_w_dist(rng_);
-        h = base_h + var_h_dist(rng_);
+        l = base_l + var_l_dist(rng_);
     } else {
         // 完全随机生成
         uniform_int_distribution<int> w_dist(min_w, max_w);
-        uniform_int_distribution<int> h_dist(min_h, max_h);
+        uniform_int_distribution<int> l_dist(min_l, max_l);
 
         w = w_dist(rng_);
-        h = h_dist(rng_);
+        l = l_dist(rng_);
     }
 
     // 应用质数偏移增加难度
@@ -316,21 +319,21 @@ pair<int, int> InstanceGenerator::GenerateItemSize(int W, int H,
         uniform_int_distribution<int> sign_dist(0, 1);
 
         int offset_w = kPrimes[prime_idx(rng_)] * (sign_dist(rng_) ? 1 : -1);
-        int offset_h = kPrimes[prime_idx(rng_)] * (sign_dist(rng_) ? 1 : -1);
+        int offset_l = kPrimes[prime_idx(rng_)] * (sign_dist(rng_) ? 1 : -1);
 
         w += offset_w;
-        h += offset_h;
+        l += offset_l;
     }
 
     // 确保在有效范围内
     w = clamp(w, min_w, max_w);
-    h = clamp(h, min_h, max_h);
+    l = clamp(l, min_l, max_l);
 
     // 确保能放入母板
     w = min(w, W);
-    h = min(h, H);
+    l = min(l, L);
 
-    return {w, h};
+    return {w, l};
 }
 
 int InstanceGenerator::GenerateDifficultSize(int stock_size, double difficulty) {
@@ -355,10 +358,10 @@ int InstanceGenerator::GenerateDifficultSize(int stock_size, double difficulty) 
 
 bool InstanceGenerator::ValidateInstance(const Instance& inst) {
     for (const auto& item : inst.items) {
-        if (item.width > inst.stock_width || item.height > inst.stock_height) {
+        if (item.width > inst.stock_width || item.length > inst.stock_length) {
             return false;
         }
-        if (item.width <= 0 || item.height <= 0 || item.demand <= 0) {
+        if (item.width <= 0 || item.length <= 0 || item.demand <= 0) {
             return false;
         }
     }
@@ -379,25 +382,26 @@ bool InstanceGenerator::ExportCSV(const Instance& inst, const string& filepath) 
     }
 
     // 写入文件头注释
-    fout << "# 2DPackLib CSV Format - 2D Cutting Stock Problem\n";
+    fout << "# 2D Cutting Stock Problem Instance (OR Standard Format)\n";
     fout << "# Generated by CS-2D-Data\n";
     fout << "# Difficulty: " << fixed << setprecision(2) << inst.difficulty << "\n";
     if (inst.known_optimal > 0) {
         fout << "# Known Optimal: " << inst.known_optimal << "\n";
     }
+    fout << "# W=width (Stage1 cutting), L=length (Stage2 cutting)\n";
     fout << "#\n";
 
-    // 写入母板尺寸
-    fout << "stock_width,stock_height\n";
-    fout << inst.stock_width << "," << inst.stock_height << "\n";
+    // 写入母板尺寸 (W, L)
+    fout << "stock_width,stock_length\n";
+    fout << inst.stock_width << "," << inst.stock_length << "\n";
     fout << "#\n";
 
-    // 写入子板数据
-    fout << "id,width,height,demand\n";
+    // 写入子板数据 (w_i, l_i, d_i)
+    fout << "id,width,length,demand\n";
     for (const auto& item : inst.items) {
         fout << item.id << ","
              << item.width << ","
-             << item.height << ","
+             << item.length << ","
              << item.demand << "\n";
     }
 
