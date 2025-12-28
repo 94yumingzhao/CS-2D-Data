@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <set>
 #include <map>
 #include <iostream>
@@ -404,6 +405,29 @@ bool InstanceGenerator::ExportCSV(const Instance& inst, const string& filepath) 
     return true;
 }
 
+string InstanceGenerator::GenerateFilename(double difficulty, const string& output_dir) {
+    // 获取当前时间
+    auto now = chrono::system_clock::now();
+    auto time_t_val = chrono::system_clock::to_time_t(now);
+
+    tm tm_buf;
+#ifdef _WIN32
+    localtime_s(&tm_buf, &time_t_val);
+#else
+    localtime_r(&time_t_val, &tm_buf);
+#endif
+
+    // 生成文件名: inst_{YYYYMMDD}_{HHMMSS}_d{difficulty}.csv
+    // 时间戳在前, 确保按文件名排序即为时间顺序
+    ostringstream filename;
+    filename << output_dir << "/inst_"
+             << put_time(&tm_buf, "%Y%m%d_%H%M%S")
+             << "_d" << fixed << setprecision(2) << difficulty
+             << ".csv";
+
+    return filename.str();
+}
+
 void InstanceGenerator::GenerateBatch(int count, double difficulty,
     const string& output_dir) {
 
@@ -412,15 +436,15 @@ void InstanceGenerator::GenerateBatch(int count, double difficulty,
     for (int i = 0; i < count; i++) {
         Instance inst = Generate(difficulty);
 
-        // 生成文件名: inst_d{difficulty}_n{num_items}_{index}.csv
-        ostringstream filename;
-        filename << output_dir << "/inst_d"
-                 << fixed << setprecision(1) << difficulty
-                 << "_n" << inst.items.size()
-                 << "_" << setfill('0') << setw(3) << i
-                 << ".csv";
+        // 生成带时间戳的文件名
+        string filepath = GenerateFilename(difficulty, output_dir);
 
-        ExportCSV(inst, filename.str());
-        cout << "Generated: " << filename.str() << endl;
+        ExportCSV(inst, filepath);
+        cout << "Generated: " << filepath << endl;
+
+        // 批量生成时等待1秒确保时间戳唯一
+        if (i < count - 1) {
+            this_thread::sleep_for(chrono::seconds(1));
+        }
     }
 }

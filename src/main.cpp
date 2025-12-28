@@ -138,7 +138,8 @@ int main(int argc, char* argv[]) {
         Instance inst = generator.Generate(difficulty, stock_width, stock_height);
         PrintInstanceInfo(inst);
 
-        string filepath = output_dir + "/instance.csv";
+        // 使用时间戳格式文件名
+        string filepath = generator.GenerateFilename(difficulty, output_dir);
         if (generator.ExportCSV(inst, filepath)) {
             cout << "\nExported to: " << filepath << "\n";
         }

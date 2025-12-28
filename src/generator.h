@@ -99,6 +99,11 @@ public:
     // 导出为 2DPackLib CSV 格式
     bool ExportCSV(const Instance& inst, const std::string& filepath);
 
+    // 生成带时间戳的文件名
+    // 格式: inst_{YYYYMMDD}_{HHMMSS}_d{difficulty}.csv
+    // 时间戳在前确保按文件名排序即为时间顺序
+    std::string GenerateFilename(double difficulty, const std::string& output_dir);
+
     // 批量生成算例
     // count: 生成数量
     // difficulty: 难度系数
