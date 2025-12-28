@@ -1,0 +1,17 @@
+# Build directories
+build/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.user
+
+# Generated data (keep structure, ignore generated files)
+data/*.csv
+data/*/*.csv
+!data/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
