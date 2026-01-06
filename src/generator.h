@@ -1,143 +1,131 @@
-// generator.h - 2D切割问题算例生成器
-// 项目: CS-2D-Data
-// 功能: 根据难度参数生成不同复杂度的二维下料问题算例
+// generator.h - 2D Cutting Stock Problem Instance Generator
+// Project: CS-2D-Data
+// 功能: 基于解耦参数生成不同特征的二维下料问题算例
 
 #ifndef CS_2D_DATA_GENERATOR_H_
 #define CS_2D_DATA_GENERATOR_H_
 
-#include <vector>
+#include "instance.h"
+#include "difficulty_estimator.h"
 #include <string>
 #include <random>
-#include <cmath>
 
-// 子板类型
-struct ItemType {
-    int id;
-    int width;      // 宽度 (切割方向, Stage1分条带)
-    int length;     // 长度 (条带延伸方向, Stage2切子板)
-    int demand;     // 需求量
+// 预设难度档位
+enum class Preset {
+    kEasy,      // 简单: 少种类, 小尺寸比, 高需求
+    kMedium,    // 中等: 平衡配置
+    kHard,      // 困难: 多种类, 大尺寸比, 低需求
+    kExpert     // 专家: 极端配置, 质数偏移
 };
 
-// 算例数据
-struct Instance {
-    int stock_width;                // 母板宽度 W (切割方向)
-    int stock_length;               // 母板长度 L (条带延伸方向)
-    std::vector<ItemType> items;    // 子板列表
-    int known_optimal;              // 已知最优解 (-1表示未知)
-    double difficulty;              // 生成时使用的难度参数
+// 生成参数结构体 (解耦设计, 各参数独立控制)
+struct GeneratorParams {
+    // 规模参数
+    int num_types = 20;         // 子板种类数 (5-100)
+    int stock_width = 200;      // 母板宽度 W
+    int stock_length = 400;     // 母板长度 L
+
+    // 尺寸参数 (相对于母板面积的比例)
+    double min_size_ratio = 0.08;   // 子板最小面积比 (0.03-0.25)
+    double max_size_ratio = 0.35;   // 子板最大面积比 (0.15-0.60)
+    double size_cv = 0.30;          // 尺寸变异系数 (0.0-0.8)
+
+    // 需求参数
+    int min_demand = 1;         // 最小需求量 (1-10)
+    int max_demand = 15;        // 最大需求量 (2-50)
+    double demand_skew = 0.0;   // 需求偏斜度 (0=均匀, 1=高度偏斜)
+
+    // 高级选项
+    bool prime_offset = false;  // 质数偏移 (增加不可整除性)
+    int num_clusters = 0;       // 尺寸聚类数 (0=不使用, 2-5=聚类生成)
+    double peak_ratio = 0.0;    // 热门子板比例 (0=均匀, 0.1-0.3=部分高需求)
+
+    // 生成策略
+    int strategy = 1;           // 0=逆向(已知最优), 1=随机, 2=聚类, 3=残差
+
+    // 随机种子
+    int seed = 0;               // 0=使用时间戳
+
+    // 从预设创建参数
+    static GeneratorParams FromPreset(Preset preset);
+
+    // 参数有效性检查
+    bool Validate() const;
+
+    // 打印参数摘要
+    std::string GetSummary() const;
 };
 
-// 难度参数派生器
-// 根据单一难度值 (0-1) 自动计算各项生成参数
-struct DifficultyParams {
-    double difficulty;  // 主难度系数 0.0(易) - 1.0(难)
-
-    // 构造函数: 输入难度值, 自动计算派生参数
-    explicit DifficultyParams(double diff) : difficulty(std::clamp(diff, 0.0, 1.0)) {}
-
-    // 子板类型数量: 难度越高, 类型越多
-    // 范围: 5 (难度0) 到 40 (难度1)
-    int NumItemTypes() const {
-        return 5 + static_cast<int>(difficulty * 35);
-    }
-
-    // 尺寸相似度: 难度越高, 尺寸越相似
-    // 范围: 0.0 (完全随机) 到 0.9 (非常相似)
-    double SizeSimilarity() const {
-        return difficulty * 0.9;
-    }
-
-    // 最大需求量: 难度越高, 需求量越小
-    // 范围: 30 (难度0) 到 3 (难度1)
-    int MaxDemand() const {
-        return std::max(3, 30 - static_cast<int>(difficulty * 27));
-    }
-
-    // 最小需求量
-    int MinDemand() const {
-        return std::max(1, MaxDemand() / 5);
-    }
-
-    // 子板尺寸下限 (相对于母板的比例)
-    // 难度越高, 最小尺寸越大 (减少简单填充)
-    double MinSizeRatio() const {
-        return 0.08 + difficulty * 0.07;  // 0.08 - 0.15
-    }
-
-    // 子板尺寸上限 (相对于母板的比例)
-    double MaxSizeRatio() const {
-        return 0.35 + difficulty * 0.15;  // 0.35 - 0.50
-    }
-
-    // 是否使用质数偏移 (增加不可整除性)
-    bool UsePrimeOffset() const {
-        return difficulty > 0.5;
-    }
-
-    // 生成策略选择
-    // 0: 逆向生成 (已知最优解)
-    // 1: 参数化随机
-    // 2: 残差算例
-    int Strategy() const {
-        if (difficulty < 0.3) return 0;
-        if (difficulty < 0.8) return 1;
-        return 2;
-    }
+// 生成结果 (包含算例和预估难度)
+struct GenerationResult {
+    Instance instance;              // 生成的算例
+    DifficultyEstimate estimate;    // 难度预估
+    bool success;                   // 是否成功
+    std::string error_message;      // 错误信息
 };
 
 // 算例生成器类
 class InstanceGenerator {
 public:
-    // 构造函数: 可指定随机种子, 默认使用时间戳
-    explicit InstanceGenerator(unsigned int seed = 0);
+    InstanceGenerator();
+    explicit InstanceGenerator(int seed);
 
-    // 主生成函数: 根据难度生成算例
-    // difficulty: 难度系数 0.0-1.0
-    // stock_width: 母板宽度 W (切割方向)
-    // stock_length: 母板长度 L (条带延伸方向)
-    Instance Generate(double difficulty, int stock_width = 200, int stock_length = 400);
+    // 主生成函数 (使用参数结构体)
+    GenerationResult Generate(const GeneratorParams& params);
 
-    // 导出为 2DPackLib CSV 格式
-    bool ExportCSV(const Instance& inst, const std::string& filepath);
+    // 快捷生成 (使用预设)
+    GenerationResult Generate(Preset preset);
 
-    // 生成带时间戳的文件名
-    // 格式: inst_{YYYYMMDD}_{HHMMSS}_d{difficulty}.csv
-    // 时间戳在前确保按文件名排序即为时间顺序
-    std::string GenerateFilename(double difficulty, const std::string& output_dir);
+    // 兼容旧接口: 单难度参数生成 (自动映射到参数)
+    GenerationResult GenerateLegacy(double difficulty, int stock_width = 200,
+                                    int stock_length = 400);
 
-    // 批量生成算例
-    // count: 生成数量
-    // difficulty: 难度系数
-    // output_dir: 输出目录
-    void GenerateBatch(int count, double difficulty, const std::string& output_dir);
+    // 导出为CSV格式 (2DPackLib兼容)
+    static bool ExportCSV(const Instance& inst, const std::string& filepath);
+
+    // 生成文件名 (带时间戳和参数标识)
+    static std::string GenerateFilename(const GeneratorParams& params,
+                                        const std::string& output_dir);
+
+    // 批量生成
+    void GenerateBatch(const GeneratorParams& params, int count,
+                       const std::string& output_dir);
+
+    // 获取难度预估器 (用于校准)
+    DifficultyEstimator& GetEstimator() { return estimator_; }
+    const DifficultyEstimator& GetEstimator() const { return estimator_; }
 
 private:
-    std::mt19937 rng_;  // 随机数生成器
+    std::mt19937 rng_;              // 随机数生成器
+    DifficultyEstimator estimator_; // 难度预估器
 
-    // 策略0: 逆向生成 (已知最优解)
-    // 先构造完美填充的切割方案, 再统计子板需求
-    Instance GenerateReverse(const DifficultyParams& params, int W, int L);
+    // 设置随机种子
+    void SetSeed(int seed);
+
+    // 策略0: 逆向生成 (构造完美填充, 已知最优解)
+    Instance GenerateReverse(const GeneratorParams& params);
 
     // 策略1: 参数化随机生成
-    // 根据难度参数控制尺寸分布和需求量
-    Instance GenerateRandom(const DifficultyParams& params, int W, int L);
+    Instance GenerateRandom(const GeneratorParams& params);
 
-    // 策略2: 残差算例生成
-    // 生成难以完美填充的子板组合
-    Instance GenerateResidual(const DifficultyParams& params, int W, int L);
+    // 策略2: 聚类生成 (尺寸分群)
+    Instance GenerateCluster(const GeneratorParams& params);
+
+    // 策略3: 残差生成 (难以完美填充)
+    Instance GenerateResidual(const GeneratorParams& params);
 
     // 生成单个子板尺寸
-    // base_w, base_l: 基准尺寸 (用于相似度控制)
-    // similarity: 相似度 0-1
-    std::pair<int, int> GenerateItemSize(int W, int L,
-        const DifficultyParams& params,
-        int base_w = 0, int base_l = 0);
+    std::pair<int, int> GenerateItemSize(const GeneratorParams& params,
+                                         int base_w = 0, int base_l = 0);
 
-    // 生成"不友好"的尺寸 (难以整除母板)
-    int GenerateDifficultSize(int stock_size, double difficulty);
+    // 生成"不友好"的尺寸 (质数偏移)
+    int GeneratePrimeOffsetSize(int stock_size, double min_ratio, double max_ratio);
 
-    // 验证算例有效性 (所有子板都能放入母板)
-    bool ValidateInstance(const Instance& inst);
+    // 生成需求量 (支持偏斜分布)
+    int GenerateDemand(const GeneratorParams& params, bool is_peak = false);
+
+    // 验证并修正算例
+    bool ValidateAndFix(Instance& inst, const GeneratorParams& params);
 };
 
 #endif  // CS_2D_DATA_GENERATOR_H_
