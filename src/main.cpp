@@ -62,41 +62,41 @@ void PrintUsage(const char* program) {
 }
 
 void PrintEstimate(const DifficultyEstimate& est) {
-    std::cout << "\nDifficulty Estimate:\n";
-    std::cout << "  Score: " << std::fixed << std::setprecision(2) << est.score << "\n";
-    std::cout << "  Level: " << est.level_name << "\n";
-    std::cout << "  Estimated Gap: " << est.estimated_gap << "\n";
-    std::cout << "  Estimated Nodes: " << est.estimated_nodes << "\n";
-    std::cout << "  Utilization LB: " << std::fixed << std::setprecision(1)
+    std::cout << "\n难度估计:\n";
+    std::cout << "  综合得分: " << std::fixed << std::setprecision(2) << est.score << "\n";
+    std::cout << "  难度级别: " << est.level_name << "\n";
+    std::cout << "  预计Gap: " << est.estimated_gap << "\n";
+    std::cout << "  预计节点数: " << est.estimated_nodes << "\n";
+    std::cout << "  利用率下界: " << std::fixed << std::setprecision(1)
               << (est.utilization_lb * 100) << "%\n";
 
-    std::cout << "\n  Factor Contributions:\n";
-    std::cout << "    Size ratio:    " << std::fixed << std::setprecision(3)
+    std::cout << "\n  各因子贡献:\n";
+    std::cout << "    尺寸比例:  " << std::fixed << std::setprecision(3)
               << est.size_contribution << "\n";
-    std::cout << "    Types:         " << est.types_contribution << "\n";
-    std::cout << "    Demand:        " << est.demand_contribution << "\n";
-    std::cout << "    CV:            " << est.cv_contribution << "\n";
-    std::cout << "    Width div:     " << est.width_div_contribution << "\n";
+    std::cout << "    类型数:    " << est.types_contribution << "\n";
+    std::cout << "    需求量:    " << est.demand_contribution << "\n";
+    std::cout << "    变异系数:  " << est.cv_contribution << "\n";
+    std::cout << "    宽度多样性:" << est.width_div_contribution << "\n";
 }
 
 void PrintInstanceInfo(const Instance& inst, const DifficultyEstimate& est) {
-    std::cout << "\nInstance Summary:\n";
-    std::cout << "  Stock: " << inst.stock_width << " x " << inst.stock_length
-              << " (area=" << inst.StockArea() << ")\n";
-    std::cout << "  Item types: " << inst.NumTypes() << "\n";
-    std::cout << "  Total demand: " << inst.TotalDemand() << "\n";
-    std::cout << "  Total demand area: " << inst.TotalDemandArea() << "\n";
-    std::cout << "  Theoretical LB: " << std::fixed << std::setprecision(2)
-              << inst.TheoreticalLowerBound() << " plates\n";
-    std::cout << "  Avg size ratio: " << std::fixed << std::setprecision(2)
+    std::cout << "\n算例摘要:\n";
+    std::cout << "  母板尺寸: " << inst.stock_width << " x " << inst.stock_length
+              << " (面积=" << inst.StockArea() << ")\n";
+    std::cout << "  子板类型数: " << inst.NumTypes() << "\n";
+    std::cout << "  总需求量: " << inst.TotalDemand() << "\n";
+    std::cout << "  总需求面积: " << inst.TotalDemandArea() << "\n";
+    std::cout << "  理论下界: " << std::fixed << std::setprecision(2)
+              << inst.TheoreticalLowerBound() << " 块母板\n";
+    std::cout << "  平均尺寸比: " << std::fixed << std::setprecision(2)
               << (inst.AvgSizeRatio() * 100) << "%\n";
-    std::cout << "  Size CV: " << std::fixed << std::setprecision(3) << inst.SizeCV() << "\n";
-    std::cout << "  Avg demand: " << std::fixed << std::setprecision(1) << inst.AvgDemand() << "\n";
-    std::cout << "  Unique widths: " << inst.NumUniqueWidths()
-              << " (diversity=" << std::setprecision(2) << inst.WidthDiversity() << ")\n";
+    std::cout << "  尺寸变异系数: " << std::fixed << std::setprecision(3) << inst.SizeCV() << "\n";
+    std::cout << "  平均需求: " << std::fixed << std::setprecision(1) << inst.AvgDemand() << "\n";
+    std::cout << "  不同宽度数: " << inst.NumUniqueWidths()
+              << " (多样性=" << std::setprecision(2) << inst.WidthDiversity() << ")\n";
 
     if (inst.known_optimal > 0) {
-        std::cout << "  Known optimal: " << inst.known_optimal << "\n";
+        std::cout << "  已知最优: " << inst.known_optimal << "\n";
     }
 
     PrintEstimate(est);
@@ -208,8 +208,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cout << "2D Cutting Stock Instance Generator v2.0\n";
-    std::cout << "=========================================\n";
+    std::cout << "二维下料问题算例生成器 v2.0\n";
+    std::cout << "===========================\n";
 
     // 创建生成器
     InstanceGenerator generator(seed);
@@ -219,19 +219,19 @@ int main(int argc, char* argv[]) {
 
     switch (mode) {
         case Mode::kLegacy: {
-            std::cout << "Mode: Legacy (difficulty=" << difficulty << ")\n";
+            std::cout << "模式: 兼容模式 (difficulty=" << difficulty << ")\n";
             if (count == 1) {
                 result = generator.GenerateLegacy(difficulty,
                     params.stock_width, params.stock_length);
                 if (result.success) {
                     PrintInstanceInfo(result.instance, result.estimate);
                     std::string filepath = InstanceGenerator::GenerateFilename(
-                        params, output_dir);
+                        params, output_dir, result.estimate.score);
                     if (InstanceGenerator::ExportCSV(result.instance, filepath)) {
-                        std::cout << "\nExported to: " << filepath << "\n";
+                        std::cout << "\n已导出: " << filepath << "\n";
                     }
                 } else {
-                    std::cerr << "Error: " << result.error_message << "\n";
+                    std::cerr << "错误: " << result.error_message << "\n";
                     return 1;
                 }
             } else {
@@ -241,18 +241,18 @@ int main(int argc, char* argv[]) {
                         params.stock_width, params.stock_length);
                     if (result.success) {
                         std::string filepath = InstanceGenerator::GenerateFilename(
-                            params, output_dir);
+                            params, output_dir, result.estimate.score);
                         InstanceGenerator::ExportCSV(result.instance, filepath);
-                        std::cout << "Generated: " << filepath
+                        std::cout << "已生成: " << filepath
                                   << " (" << result.estimate.level_name
-                                  << ", score=" << std::fixed << std::setprecision(2)
+                                  << ", 得分=" << std::fixed << std::setprecision(2)
                                   << result.estimate.score << ")\n";
                     }
                     if (i < count - 1) {
                         std::this_thread::sleep_for(std::chrono::seconds(1));
                     }
                 }
-                std::cout << "\nGenerated " << count << " instances in " << output_dir << "\n";
+                std::cout << "\n已在 " << output_dir << " 生成 " << count << " 个算例\n";
             }
             break;
         }
@@ -260,12 +260,12 @@ int main(int argc, char* argv[]) {
         case Mode::kPreset: {
             std::string preset_name;
             switch (preset) {
-                case Preset::kEasy:   preset_name = "Easy"; break;
-                case Preset::kMedium: preset_name = "Medium"; break;
-                case Preset::kHard:   preset_name = "Hard"; break;
-                case Preset::kExpert: preset_name = "Expert"; break;
+                case Preset::kEasy:   preset_name = "简单"; break;
+                case Preset::kMedium: preset_name = "中等"; break;
+                case Preset::kHard:   preset_name = "困难"; break;
+                case Preset::kExpert: preset_name = "专家"; break;
             }
-            std::cout << "Mode: Preset (" << preset_name << ")\n";
+            std::cout << "模式: 预设模式 (" << preset_name << ")\n";
 
             GeneratorParams preset_params = GeneratorParams::FromPreset(preset);
             preset_params.stock_width = params.stock_width;
@@ -277,12 +277,12 @@ int main(int argc, char* argv[]) {
                 if (result.success) {
                     PrintInstanceInfo(result.instance, result.estimate);
                     std::string filepath = InstanceGenerator::GenerateFilename(
-                        preset_params, output_dir);
+                        preset_params, output_dir, result.estimate.score);
                     if (InstanceGenerator::ExportCSV(result.instance, filepath)) {
-                        std::cout << "\nExported to: " << filepath << "\n";
+                        std::cout << "\n已导出: " << filepath << "\n";
                     }
                 } else {
-                    std::cerr << "Error: " << result.error_message << "\n";
+                    std::cerr << "错误: " << result.error_message << "\n";
                     return 1;
                 }
             } else {
@@ -292,13 +292,13 @@ int main(int argc, char* argv[]) {
         }
 
         case Mode::kManual: {
-            std::cout << "Mode: Manual\n";
+            std::cout << "模式: 手动模式\n";
             params.seed = seed;
 
             std::cout << params.GetSummary();
 
             if (!params.Validate()) {
-                std::cerr << "Error: Invalid parameters\n";
+                std::cerr << "错误: 参数无效\n";
                 return 1;
             }
 
@@ -307,12 +307,12 @@ int main(int argc, char* argv[]) {
                 if (result.success) {
                     PrintInstanceInfo(result.instance, result.estimate);
                     std::string filepath = InstanceGenerator::GenerateFilename(
-                        params, output_dir);
+                        params, output_dir, result.estimate.score);
                     if (InstanceGenerator::ExportCSV(result.instance, filepath)) {
-                        std::cout << "\nExported to: " << filepath << "\n";
+                        std::cout << "\n已导出: " << filepath << "\n";
                     }
                 } else {
-                    std::cerr << "Error: " << result.error_message << "\n";
+                    std::cerr << "错误: " << result.error_message << "\n";
                     return 1;
                 }
             } else {

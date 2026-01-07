@@ -85,7 +85,8 @@ public:
 
     // 生成文件名 (带时间戳和参数标识)
     static std::string GenerateFilename(const GeneratorParams& params,
-                                        const std::string& output_dir);
+                                        const std::string& output_dir,
+                                        double difficulty_score = 0.0);
 
     // 批量生成
     void GenerateBatch(const GeneratorParams& params, int count,

@@ -91,15 +91,15 @@ bool GeneratorParams::Validate() const {
 // 打印参数摘要
 std::string GeneratorParams::GetSummary() const {
     std::ostringstream ss;
-    ss << "GeneratorParams:\n"
-       << "  num_types: " << num_types << "\n"
-       << "  stock: " << stock_width << " x " << stock_length << "\n"
-       << "  size_ratio: [" << min_size_ratio << ", " << max_size_ratio << "]\n"
-       << "  size_cv: " << size_cv << "\n"
-       << "  demand: [" << min_demand << ", " << max_demand << "]\n"
-       << "  demand_skew: " << demand_skew << "\n"
-       << "  prime_offset: " << (prime_offset ? "yes" : "no") << "\n"
-       << "  strategy: " << strategy << "\n";
+    ss << "生成参数:\n"
+       << "  子板类型数: " << num_types << "\n"
+       << "  母板尺寸: " << stock_width << " x " << stock_length << "\n"
+       << "  尺寸比例: [" << min_size_ratio << ", " << max_size_ratio << "]\n"
+       << "  尺寸变异系数: " << size_cv << "\n"
+       << "  需求范围: [" << min_demand << ", " << max_demand << "]\n"
+       << "  需求偏斜度: " << demand_skew << "\n"
+       << "  质数偏移: " << (prime_offset ? "是" : "否") << "\n"
+       << "  生成策略: " << strategy << "\n";
     return ss.str();
 }
 
@@ -637,7 +637,9 @@ bool InstanceGenerator::ExportCSV(const Instance& inst, const std::string& filep
 
 // 生成文件名
 std::string InstanceGenerator::GenerateFilename(const GeneratorParams& params,
-    const std::string& output_dir) {
+    const std::string& output_dir, double difficulty_score) {
+
+    (void)params;  // 参数保留供将来扩展
 
     auto now = std::chrono::system_clock::now();
     auto time_t_val = std::chrono::system_clock::to_time_t(now);
@@ -649,12 +651,11 @@ std::string InstanceGenerator::GenerateFilename(const GeneratorParams& params,
     localtime_r(&time_t_val, &tm_buf);
 #endif
 
-    // 格式: inst_{YYYYMMDD}_{HHMMSS}_n{num_types}_s{strategy}.csv
+    // 格式: inst_d{difficulty}_{YYYYMMDD}_{HHMMSS}.csv
     std::ostringstream filename;
-    filename << output_dir << "/inst_"
-             << std::put_time(&tm_buf, "%Y%m%d_%H%M%S")
-             << "_n" << params.num_types
-             << "_s" << params.strategy
+    filename << output_dir << "/inst_d"
+             << std::fixed << std::setprecision(2) << difficulty_score
+             << "_" << std::put_time(&tm_buf, "%Y%m%d_%H%M%S")
              << ".csv";
 
     return filename.str();
@@ -669,15 +670,15 @@ void InstanceGenerator::GenerateBatch(const GeneratorParams& params,
     for (int i = 0; i < count; i++) {
         auto result = Generate(params);
         if (!result.success) {
-            std::cerr << "Warning: Failed to generate instance " << i << std::endl;
+            std::cerr << "警告: 生成第 " << i << " 个算例失败" << std::endl;
             continue;
         }
 
-        std::string filepath = GenerateFilename(params, output_dir);
+        std::string filepath = GenerateFilename(params, output_dir, result.estimate.score);
         ExportCSV(result.instance, filepath);
 
-        std::cout << "Generated: " << filepath
-                  << " (difficulty=" << std::fixed << std::setprecision(2)
+        std::cout << "已生成: " << filepath
+                  << " (难度=" << std::fixed << std::setprecision(2)
                   << result.estimate.score << ", " << result.estimate.level_name << ")"
                   << std::endl;
 
