@@ -514,6 +514,11 @@ std::pair<int, int> InstanceGenerator::GenerateItemSize(
         l = std::clamp(l + offset, 5, L);
     }
 
+    // 确保 length >= width (工程规范要求)
+    if (l < w) {
+        std::swap(w, l);
+    }
+
     return {w, l};
 }
 
