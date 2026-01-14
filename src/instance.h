@@ -1,3 +1,11 @@
+// ============================================================================
+// 工程标准 (Engineering Standards)
+// - 坐标系: 左下角为原点
+// - 宽度(Width): 上下方向 (Y轴)
+// - 长度(Length): 左右方向 (X轴)
+// - 约束: 长度 >= 宽度
+// ============================================================================
+
 // instance.h - 2D Cutting Stock Problem Instance Data Structures
 // Project: CS-2D-Data
 // Purpose: Define Instance and Item structures with statistics methods
